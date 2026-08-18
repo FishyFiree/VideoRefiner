@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videorefiner"
+version = "0.1.0"
+description = "AI 视频插帧工具：输入任意帧率视频，输出更高帧率（如 60→120fps），只插帧不改画面内容"
+requires-python = ">=3.11"
+dependencies = [
+    "av>=12",
+    "numpy>=1.24",
+    "torch>=2.0",
+    "PySide6>=6.6",
+]
+
+[project.scripts]
+videorefiner = "videorefiner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["videorefiner*"]
