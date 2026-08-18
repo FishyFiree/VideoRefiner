@@ -72,13 +72,18 @@ CUDA runtime), and there is no upscaling — all on the roadmap.
 
 ## 📦 Installation
 
-### Option 1: Download the release package (recommended)
+### Option 1: Installer (recommended)
 
-Download `VideoRefiner-windows.zip` from [GitHub Releases](https://github.com/Yuh-Hypnotized/VideoRefiner/releases),
-unzip it and run `VideoRefiner.exe` (no Python environment needed).
+Download **`VideoRefiner-setup.exe`** (~1.7GB, single file) from [GitHub Releases](https://github.com/Yuh-Hypnotized/VideoRefiner/releases),
+run it (no admin rights needed — installs to the current user's folder), then launch `VideoRefiner` from the
+desktop / Start menu.
 
 > The AI model (~15MB) is auto-downloaded on first run. If your antivirus flags the executable, that's a common
 > PyInstaller false positive — add an exclusion or report the false positive.
+
+### Option 2: Portable zip
+
+Download `VideoRefiner-windows.zip`, unzip it and run `VideoRefiner.exe` (no installation needed).
 
 ### Option 2: Run from source
 
@@ -129,10 +134,13 @@ videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # high quality prese
 ## 🛠️ Building
 
 ```bash
-python build.py   # produces dist/VideoRefiner/ and dist/VideoRefiner-windows.zip
+python build.py              # PyInstaller one-dir + zip
+python build.py --installer  # also compile the Inno Setup installer (VideoRefiner-setup.exe, ~1.7GB, single file <2GB)
 ```
 
-> The bundle is ~5GB (mostly PyTorch CUDA runtime) — expected.
+> The app dir is ~4.5GB (mostly the PyTorch CUDA runtime); the zip is ~2.7GB (GitHub Releases caps single files at 2GB,
+> so the installer is the recommended artifact). The installer wizard is currently English (the app UI is Chinese);
+> a Simplified-Chinese wizard language file can be added later.
 
 ## 📄 License & Credits
 

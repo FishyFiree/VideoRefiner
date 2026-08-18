@@ -65,12 +65,16 @@
 
 ## 📦 安装
 
-### 方式一：下载发布包（推荐）
+### 方式一：下载安装程序（推荐）
 
-从 [GitHub Releases](https://github.com/Yuh-Hypnotized/VideoRefiner/releases) 下载 `VideoRefiner-windows.zip`，
-解压后双击运行 `VideoRefiner.exe` 即可（无需安装 Python/环境）。
+从 [GitHub Releases](https://github.com/Yuh-Hypnotized/VideoRefiner/releases) 下载 **`VideoRefiner-setup.exe`**（约 1.7GB，单文件），
+双击安装（无需管理员权限，安装到当前用户目录），安装完成后从桌面/开始菜单启动 `VideoRefiner`。
 
 > 首次运行会自动下载 AI 模型（约 15MB）；若杀毒软件误报，属 PyInstaller 产物常见情况，可提交误报申诉或添加信任。
+
+### 方式二：绿色免安装版
+
+下载 `VideoRefiner-windows.zip` 并解压，双击运行 `VideoRefiner.exe`（无需安装）。
 
 ### 方式二：源码运行
 
@@ -119,10 +123,12 @@ videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # 高质量预设
 ## 🛠️ 构建打包
 
 ```bash
-python build.py   # 产出 dist/VideoRefiner/ 与 dist/VideoRefiner-windows.zip
+python build.py              # PyInstaller 单目录 + zip
+python build.py --installer  # 再编译 Inno Setup 安装程序（VideoRefiner-setup.exe，约 1.7GB，单文件 <2GB）
 ```
 
-> 打包体积约 5GB（主要来自 PyTorch CUDA 运行时），属正常现象。
+> 应用目录约 4.5GB（主要来自 PyTorch CUDA 运行时）；zip 约 2.7GB（GitHub Release 单文件限 2GB，
+> 故推荐以安装程序形式发布）。安装向导当前为英文（产品界面为中文），简体中文向导语言文件可后续补充。
 
 ## 📄 许可证与致谢
 
