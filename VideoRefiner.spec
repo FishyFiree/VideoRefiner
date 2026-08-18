@@ -1,11 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 """VideoRefiner PyInstaller spec：单目录 GUI 包（标准单入口模式）。
 
-- 依赖收集用官方标准 hook（av / torch / torchvision / PySide6）
+- 依赖收集用官方标准 hook（av / torch / PySide6）
 - nvidia.* CUDA 动态库：torch 运行时经 ctypes 加载、import 图不可见 → 显式收集
 - vendored RIFE 代码（third_party/）作为数据打入（运行时经 sys.path 加载）
 - 模型文件不打包（首次运行自动下载，PRD 决策）
 - 隐藏自检：VideoRefiner.exe --selftest <输入> <输出>（无头跑一次真实插帧）
+- excludes：剔除 hook 顺带拖入的无关重量级依赖（scipy/pandas/sklearn/nltk/lxml/
+  matplotlib/numba/faiss/transformers/cv2/torchvision/PIL 等）——torch 推理用不到，
+  vendored model/loss.py 已把 torchvision 改为惰性导入（仅训练用），可安全排除
 """
 
 import pkgutil
@@ -28,6 +31,16 @@ for m in pkgutil.iter_modules():
         binaries += collect_dynamic_libs(m.name)
         hiddenimports += collect_submodules(m.name)
 
+_EXCLUDES = [
+    # 推理不需要的重量级依赖（hook 顺带拖入）
+    "scipy", "pandas", "sklearn", "nltk", "lxml", "matplotlib", "numba",
+    "llvmlite", "faiss", "faiss_cpu", "transformers", "openpyxl", "regex",
+    "anyio", "rich", "pygments", "fsspec", "tzdata", "pydantic",
+    "cryptography", "win32com", "dateutil", "six", "pytest",
+    # torchvision 及其依赖链（vendored loss.py 已惰性导入，仅训练用）
+    "torchvision", "cv2", "PIL", "pillow", "opencv-python",
+]
+
 a = Analysis(
     [str(ROOT / "entry.py")],
     pathex=[str(ROOT)],
@@ -37,7 +50,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=_EXCLUDES,
     noarchive=False,
 )
 
