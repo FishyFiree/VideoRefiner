@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 构建产物（Release 发布时单独上传 zip）
+build/
+dist/
+
+# 本地临时文件
+.tmp/
+
+# 测试与固定素材（保留本地开发用，不随开源仓库发布）
+tests/
+
+# 本地 wayfinder tracker / agent 配置（内部使用，不入库）
+.scratch/
+docs/agents/
+AGENTS.md
+
+# 开发工具产物
+.dsh-notes/
+.dsh-vision-router/

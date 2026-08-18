@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="0.55" stop-color="#1e40af"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="ghost" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dd3fc" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0.45"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角方块（满铺画布，四角透明） -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- 高光 -->
+  <rect x="0" y="0" width="512" height="200" rx="112" fill="#ffffff" opacity="0.05"/>
+
+  <!-- 帧 1（源帧，实心青） -->
+  <rect x="96" y="168" width="84" height="176" rx="14" fill="#38bdf8"/>
+  <!-- 帧 1 内部线条（视频内容暗示） -->
+  <rect x="120" y="196" width="36" height="44" rx="6" fill="#0ea5e9"/>
+  <rect x="120" y="256" width="36" height="14" rx="4" fill="#0ea5e9"/>
+  <rect x="120" y="286" width="36" height="14" rx="4" fill="#0ea5e9"/>
+
+  <!-- 帧 2（插值帧，半透明错位，表示生成） -->
+  <rect x="214" y="168" width="84" height="176" rx="14" fill="url(#ghost)"/>
+  <rect x="238" y="196" width="36" height="44" rx="6" fill="#0284c7" opacity="0.6"/>
+  <rect x="238" y="256" width="36" height="14" rx="4" fill="#0284c7" opacity="0.6"/>
+  <rect x="238" y="286" width="36" height="14" rx="4" fill="#0284c7" opacity="0.6"/>
+
+  <!-- 帧 3（目标帧，实心紫粉） -->
+  <rect x="332" y="168" width="84" height="176" rx="14" fill="#f0abfc"/>
+  <rect x="356" y="196" width="36" height="44" rx="6" fill="#d946ef"/>
+  <rect x="356" y="256" width="36" height="14" rx="4" fill="#d946ef"/>
+  <rect x="356" y="286" width="36" height="14" rx="4" fill="#d946ef"/>
+
+  <!-- 插值轨迹箭头（60 → 120 的方向暗示） -->
+  <path d="M120 400 h272 l-28 -28 m28 28 -28 28"
+        stroke="#e2e8f0" stroke-width="16" fill="none"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>
