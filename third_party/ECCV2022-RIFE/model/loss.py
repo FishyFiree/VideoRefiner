@@ -2,7 +2,9 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models as models
+# 注（VideoRefiner 打包优化）：torchvision 仅在 VGGPerceptualLoss（训练用）中用到，
+# 改为惰性导入，避免推理与打包引入 torchvision/PIL/opencv 等重量级依赖。
+# import torchvision.models as models
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -98,6 +100,7 @@ class MeanShift(nn.Conv2d):
 class VGGPerceptualLoss(torch.nn.Module):
     def __init__(self, rank=0):
         super(VGGPerceptualLoss, self).__init__()
+        from torchvision import models  # 惰性导入（仅训练用，避免推理/打包依赖）
         blocks = []
         pretrained = True
         self.vgg_pretrained_features = models.vgg19(pretrained=pretrained).features

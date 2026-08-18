@@ -8,6 +8,8 @@
 - 锁定 commit：`5d8adbdd40e12c2c8f91930eff838aebe561c086`
 - 用途：提供 `model/` 包（warplayer 光流算子、loss 等底层模块）
 - 已精简：仅保留运行时需要的 `model/` 包 + LICENSE + README（移除训练/演示代码）
+- **本地改动**：`model/loss.py` 顶部 `import torchvision.models` 改为 `VGGPerceptualLoss`
+  内的惰性导入（torchvision 仅训练用；避免推理与打包引入 torchvision/PIL/opencv）
 
 ## RIFE v4.26 官方模型包（`RIFE-v4.26/`）
 
