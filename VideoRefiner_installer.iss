@@ -2,9 +2,9 @@
 ; 用法：ISCC.exe VideoRefiner_installer.iss（需先运行 build.py 生成 dist\VideoRefiner）
 
 #define MyAppName "VideoRefiner"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "Yuh-Hypnotized"
-#define MyAppURL "https://github.com/Yuh-Hypnotized/VideoRefiner"
+#define MyAppVersion "0.2.0"
+#define MyAppPublisher "FishyFiree"
+#define MyAppURL "https://github.com/FishyFiree/VideoRefiner"
 #define MyAppExeName "VideoRefiner.exe"
 
 [Setup]

@@ -67,7 +67,7 @@ RES_PRESETS = [
 # 超分模型预设
 SR_MODEL_NAMES = {"通用（默认）": "realesr-general-wdn-x4v3", "动漫": "RealESRGAN_x4plus_anime_6B"}
 
-PROJECT_URL = "https://github.com/Yuh-Hypnotized/VideoRefiner"
+PROJECT_URL = "https://github.com/FishyFiree/VideoRefiner"
 
 
 def _fmt_seconds(sec: float) -> str:

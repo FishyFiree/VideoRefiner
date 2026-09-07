@@ -69,7 +69,7 @@
 
 ### 方式一：下载安装程序（推荐）
 
-从 [GitHub Releases](https://github.com/Yuh-Hypnotized/VideoRefiner/releases) 下载 **`VideoRefiner-setup.exe`**（约 1.7GB，单文件），
+从 [GitHub Releases](https://github.com/FishyFiree/VideoRefiner/releases) 下载 **`VideoRefiner-setup.exe`**（约 1.7GB，单文件），
 双击安装（无需管理员权限，安装到当前用户目录），安装完成后从桌面/开始菜单启动 `VideoRefiner`。
 
 > 首次运行会自动下载 AI 模型（约 15MB）；若杀毒软件误报，属 PyInstaller 产物常见情况，可提交误报申诉或添加信任。
@@ -81,7 +81,7 @@
 ### 方式二：源码运行
 
 ```bash
-git clone https://github.com/Yuh-Hypnotized/VideoRefiner.git
+git clone https://github.com/FishyFiree/VideoRefiner.git
 cd VideoRefiner
 pip install -e .
 python -m videorefiner.gui        # 启动 GUI
@@ -162,4 +162,4 @@ python build.py --installer  # 再编译 Inno Setup 安装程序（VideoRefiner-
 - 提速方向：NVENC 硬件编码、TensorRT 引擎、批处理优化、超分 tile 调优
 - 断点续传暂不支持
 
-有任何问题或建议，欢迎提 [Issue](https://github.com/Yuh-Hypnotized/VideoRefiner/issues)！
+有任何问题或建议，欢迎提 [Issue](https://github.com/FishyFiree/VideoRefiner/issues)！
