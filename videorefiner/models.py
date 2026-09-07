@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from . import __version__
+
 DEFAULT_MODEL = "rife4.26.pkl"
 
 # Real-ESRGAN 模型源（BSD-3-Clause 许可，官方锚定于 GitHub Releases；此处走
@@ -208,7 +210,7 @@ def _download(
     progress_cb: Optional[Callable[[int, int], None]],
     cancel_check: Optional[Callable[[], bool]],
 ) -> None:
-    req = urllib.request.Request(url, headers={"User-Agent": "videorefiner/0.1"})
+    req = urllib.request.Request(url, headers={"User-Agent": f"videorefiner/{__version__}"})
     with urllib.request.urlopen(req, timeout=120) as resp:
         total = int(resp.headers.get("Content-Length") or 0)
         done = 0

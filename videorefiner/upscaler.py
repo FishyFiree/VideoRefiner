@@ -1,12 +1,11 @@
-"""Real-ESRGAN 超分引擎实现（v2，V2-1）：实现 :class:`Upscaler` 契约。
+"""Real-ESRGAN 超分引擎实现（v2）：实现 :class:`Upscaler` 契约。
 
-集中说明（参考 .scratch/video-interpolation-v2/research/01-super-res-engine.md）：
 - 主引擎 Real-ESRGAN（v0.3.x，BSD-3），结构 vendored 于 ``videorefiner/sr_archs.py``
   （不引入 basicsr/realesrgan，规避 Python 3.14 依赖与打包体积问题）。
 - 模型目录见 ``videorefiner/models.py`` 的 ``SUPERRES_MODELS``：
   默认 ``realesr-general-wdn-x4v3``（x4、SRVGGNetCompact、无降噪卷积，契合纯提升）。
 - 契约 ``upscale(frame_rgb, out_w, out_h)``：整数倍走模型原生倍率，非整数倍先模型
-  原生倍率放大再 bicubic 缩放回目标（"往返"，见 research ① 做法一）。
+  原生倍率放大再 bicubic 缩放回目标（"往返"）。
 - tile 自动分块（按显存自适应）+ pre-pad overlap 去接缝；fp16；OOM 时自动降 tile 重试。
 - ``BicubicUpscaler`` 为轻量占位（测试/调试用，无模型），类比 v1 的 BlendEngine。
 """
