@@ -31,6 +31,14 @@ for m in pkgutil.iter_modules():
         binaries += collect_dynamic_libs(m.name)
         hiddenimports += collect_submodules(m.name)
 
+# v2 新模块（部分经函数内惰性导入，PyInstaller 字节码分析通常能找到，
+# 显式列出作兜底，避免打包后 ImportError）
+hiddenimports += [
+    "videorefiner.upscaler",
+    "videorefiner.scale",
+    "videorefiner.sr_archs",
+]
+
 _EXCLUDES = [
     # 推理不需要的重量级依赖（hook 顺带拖入）
     "scipy", "pandas", "sklearn", "nltk", "lxml", "matplotlib", "numba",

@@ -831,12 +831,19 @@ def main(argv: list | None = None) -> int:
     """GUI 入口；隐藏模式 ``--selftest <输入> <输出>``：无头跑一次真实插帧
     （打包产物自检用：windowed exe 无控制台，以退出码 + 输出文件验证）。"""
     argv = argv if argv is not None else sys.argv[1:]
-    if argv[:1] == ["--selftest"] and len(argv) == 3:
+    if argv[:1] == ["--selftest"] and len(argv) in (3, 4):
         from .pipeline import run as _pipeline_run
         from .rife import RifeEngine
+        from .upscaler import RealESRGANUpscaler
 
+        res = None
+        upscaler = None
+        if len(argv) == 4:
+            res = int(argv[3])          # 可选：目标分辨率（档位长边），测组合（插帧120+超分）
+            upscaler = RealESRGANUpscaler()
         try:
-            _pipeline_run(argv[1], argv[2], 120, engine=RifeEngine())
+            _pipeline_run(argv[1], argv[2], 120, engine=RifeEngine(),
+                          target_edge=res, upscaler=upscaler)
             return 0
         except Exception:
             return 1
