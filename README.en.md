@@ -10,6 +10,24 @@ Built on RIFE (optical-flow interpolation) and Real-ESRGAN (super-resolution, co
 
 ---
 
+## ❓ Why this project?
+
+Short-video creators commonly hit **two** problems:
+
+**① Choppy motion / unsatisfying frame rate.** Phones and cameras often only record 30fps or 60fps, or shooting conditions make the motion look "one-frame-at-a-time" instead of silky-smooth.
+
+**② Footage isn't sharp / resolution is too low.** A 1080p (or lower) clip looks soft and loses detail on a large or 4K display.
+
+These two problems **often appear together**: video that is both choppy *and* blurry. Traditional workarounds all have pain points:
+
+- Recording at high frame rate / resolution → limited by hardware, huge files
+- "Speed up / slow down" in an editor → changes playback speed but adds no frames; motion gets *worse*
+- Professional post tools → steep learning curve and high cost (e.g. Topaz Video AI costs hundreds of dollars)
+
+**VideoRefiner fixes both at once**: drop in your footage, pick a target frame rate + target resolution, press start — the AI adds in-between frames to make motion **silky**, and upscales to make the picture **sharper**. **Your visual content is untouched; only the motion gets smoother and the image gets clearer.** Free, open source, ready out of the box (with NVIDIA GPU acceleration) — built for creators who want videos that are both smooth and sharp, especially short-video makers and anime/game-recording fans.
+
+---
+
 ## ✨ Features
 
 ### AI optical-flow interpolation (RIFE v4.26)
@@ -39,24 +57,6 @@ Built on RIFE (optical-flow interpolation) and Real-ESRGAN (super-resolution, co
 ### Quality assurance (measured/calibrated)
 - Interpolation: PSNR ≥ 32dB / SSIM ≥ 0.95 on synthetic ground truth (measured 48.6dB / 0.998 with RIFE fp16)
 - Super-resolution: x2 measured PSNR≈38.4 / SSIM≈0.955 (acceptance 34/0.94); x4 measured PSNR≈42.5 / SSIM≈0.973 (acceptance 34/0.93)
-
----
-
-## ❓ Why this project?
-
-Short-video creators commonly hit **two** problems:
-
-**① Choppy motion / unsatisfying frame rate.** Phones and cameras often only record 30fps or 60fps, or shooting conditions make the motion look "one-frame-at-a-time" instead of silky-smooth.
-
-**② Footage isn't sharp / resolution is too low.** A 1080p (or lower) clip looks soft and loses detail on a large or 4K display.
-
-These two problems **often appear together**: video that is both choppy *and* blurry. Traditional workarounds all have pain points:
-
-- Recording at high frame rate / resolution → limited by hardware, huge files
-- "Speed up / slow down" in an editor → changes playback speed but adds no frames; motion gets *worse*
-- Professional post tools → steep learning curve and high cost (e.g. Topaz Video AI costs hundreds of dollars)
-
-**VideoRefiner fixes both at once**: drop in your footage, pick a target frame rate + target resolution, press start — the AI adds in-between frames to make motion **silky**, and upscales to make the picture **sharper**. **Your visual content is untouched; only the motion gets smoother and the image gets clearer.** Free, open source, ready out of the box (with NVIDIA GPU acceleration) — built for creators who want videos that are both smooth and sharp, especially short-video makers and anime/game-recording fans.
 
 ---
 
