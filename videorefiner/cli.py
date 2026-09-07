@@ -29,6 +29,20 @@ def _make_engine(name: str):
     return BlendEngine()
 
 
+def _make_upscaler(name: str):
+    """构造超分引擎；bicubic 为占位（调试/无模型测试）。"""
+    if name == "bicubic":
+        from .upscaler import BicubicUpscaler
+
+        return BicubicUpscaler()
+    from . import models as models_mod
+    from .upscaler import RealESRGANUpscaler
+
+    if models_mod.find_local_superres_model("realesr-general-wdn-x4v3") is None:
+        print("首次运行将自动下载 Real-ESRGAN 模型（约 5MB，HuggingFace 镜像）……", file=sys.stderr)
+    return RealESRGANUpscaler()
+
+
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="videorefiner",
@@ -53,6 +67,15 @@ def main(argv: list | None = None) -> int:
         "--scene-threshold", type=float, default=30.0, metavar="FLOAT",
         help="场景切换检测阈值（平均绝对像素差，0-255；设 0 关闭保护）",
     )
+    parser.add_argument(
+        "--resolution", type=int, default=None, metavar="EDGE",
+        help="目标分辨率（超分，以档位长边表示，如 2560/3840/7680）；"
+             "不指定则不超分。与 --fps 组合时先插帧（原生分辨率）再超分，等比不拉伸",
+    )
+    parser.add_argument(
+        "--model", choices=["realesrgan", "bicubic"], default="realesrgan",
+        help="超分引擎：realesrgan（Real-ESRGAN，默认）/ bicubic（纯双三次，调试用）",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -65,6 +88,8 @@ def main(argv: list | None = None) -> int:
             engine=_make_engine(args.engine),
             progress_cb=_progress_to_stderr,
             scene_threshold=args.scene_threshold or None,
+            target_edge=args.resolution,
+            upscaler=_make_upscaler(args.model),
         )
     except Cancelled:
         print("已取消。", file=sys.stderr)

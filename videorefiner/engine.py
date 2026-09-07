@@ -37,6 +37,26 @@ class FrameInterpolator(Protocol):
         ...
 
 
+class Upscaler(Protocol):
+    """超分引擎契约（v2）。帧为 RGB uint8 numpy 数组 (H, W, 3)。
+
+    与 :class:`FrameInterpolator` 并列：``upscale(frame, out_w, out_h)`` 返回
+    尺寸恰为 (out_h, out_w, 3) 的 RGB uint8 帧（目标宽高由编排层等比算好传入）。
+    """
+
+    def upscale(self, frame: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
+        """对单帧超分到目标宽高；返回 RGB uint8 (out_h, out_w, 3)。"""
+        ...
+
+    def load(self) -> None:
+        """加载模型（占位实现为空操作）。"""
+        ...
+
+    def unload(self) -> None:
+        """释放模型资源。"""
+        ...
+
+
 class BlendEngine:
     """帧混合占位引擎（S1）：result = (1-t)*a + t*b。"""
 

@@ -1,23 +1,25 @@
-# VideoRefiner — AI Video Frame Interpolation
+# VideoRefiner — AI Video Frame Interpolation + Upscaling
 
 <p align="center">
   <img src="assets/icon.png" width="120" alt="VideoRefiner">
 </p>
 
-**Convert videos to higher frame rates (e.g. 60fps → 120fps) using AI frame interpolation. Only AI-generated new frames are inserted — the original visual content stays unchanged, making motion look smoother.**
+**Convert videos to a higher frame rate (e.g. 60fps → 120fps) and/or resolution (e.g. 1080p → 4K) using AI — only AI generation/reconstruction, no change to visual semantics. Interpolation uses [RIFE](https://github.com/hzwer/ECCV2022-RIFE); super-resolution uses [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN).**
 
-Built on [RIFE](https://github.com/hzwer/ECCV2022-RIFE) (optical-flow frame interpolation, MIT licensed) with a PySide6 desktop GUI. Supports any source → any target frame rate, including non-integer multiples (e.g. 24→60).
+Built on RIFE (optical-flow interpolation), Real-ESRGAN (upscaling, both commercially friendly BSD-3/MIT) and a PySide6 desktop GUI. Supports any source → target frame rate including non-integer multiples (e.g. 24→60), with **aspect-preserving** upscaling.
 
 ## ✨ Features
 
 - **AI optical-flow interpolation** (RIFE v4.26): naturally generated in-between frames; content-preserving (semantics unchanged, output fully re-encoded)
+- **AI super-resolution / quality** (Real-ESRGAN v0.3.x): per-frame upscaling (e.g. 1080p→4K), **aspect-preserving** (vertical / 4:3 / square sources stay undistorted); integer-scale uses the model's native scale, non-integer uses "bicubic round-trip + model refinement"
+- **Composable pipeline**: both the frame-rate and resolution targets accept `≥` the source value; equal → that stage is skipped; both equal → "parameters identical to source, please change". Order is **interpolate (native res) → upscale**
 - **Arbitrary target frame rate**: 60→120 by default; also 24→60, 30→120, or any combination (up to 1000fps)
 - **Desktop GUI (Chinese)**: drag & drop / batch queue, parameters, live progress + ETA, cancellable, and a side-by-side comparison player (original vs result, synchronized)
 - **CLI**: `videorefiner <input> --fps 120 -o <output>` for scripting
-- **Automatic model management**: model (~15MB) auto-downloaded on first run from HuggingFace mirror; offline placement supported
+- **Automatic model management**: interpolation (~15MB) and super-res (~5MB+) models auto-downloaded on first run from a HuggingFace mirror; offline placement supported
 - **Scene-change protection**: source frames are reused at cuts to avoid ghosting artifacts
 - **Audio passthrough**: original audio track preserved untouched
-- Quality: PSNR ≥ 32dB / SSIM ≥ 0.95 on synthetic test sets (measured 48.6dB / 0.998 with RIFE fp16)
+- Quality: interpolation PSNR ≥ 32dB / SSIM ≥ 0.95 (measured 48.6dB / 0.998 with RIFE fp16); super-res x2 measured PSNR≈38.4/SSIM≈0.955, x4 measured PSNR≈42.5/SSIM≈0.973
 
 ## ❓ Why this project?
 
@@ -58,8 +60,8 @@ the motion gets smoother**. Free, open source, and ready to use out of the box �
 
 **Honest gaps**: Topaz has a higher quality ceiling (upscaling + interpolation) but costs hundreds of dollars;
 SVFI/Flowframes have longer track records and more mature batch/GPU optimization (TensorRT etc.); CapCut-class mobile
-apps are free and handy for light use. Our v1 supports NVIDIA GPUs only, the bundle is large (~5GB, mostly the PyTorch
-CUDA runtime), and there is no upscaling — all on the roadmap.
+apps are free and handy for light use. We support NVIDIA GPUs only, the bundle is large (~5GB, mostly the PyTorch
+CUDA runtime) — non-NVIDIA support and bundle-size optimization are on the roadmap.
 
 ## 💻 System Requirements
 
@@ -107,10 +109,14 @@ the serial queue processes them one by one → double-click a "done" item to com
 **CLI**:
 
 ```bash
-videorefiner input.mp4 --fps 120 -o output.mp4              # 60→120
+videorefiner input.mp4 --fps 120 -o output.mp4              # 60→120 (interpolation only)
 videorefiner input.mp4 --fps 60 --codec h264 -o out.mp4     # specify codec
 videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # high quality preset
+videorefiner input.mp4 --resolution 3840 -o out.mp4         # upscale only to 4K (set --fps to the source fps)
+videorefiner input.mp4 --fps 120 --resolution 3840 -o out.mp4  # interpolate to 120 then upscale to 4K (aspect-preserving)
 ```
+
+> `--resolution` uses the "target long edge" (e.g. 2560=2K / 3840=4K / 7680=8K). The resolution target must be `≥` the source; equal → interpolation only; equal to the source fps → upscaling only. The GUI's resolution dropdown and stage progress (V2-4) are in development — use the CLI for super-resolution for now.
 
 ## ⚡ Performance (measured on RTX 4060 Laptop 8GB)
 
@@ -124,12 +130,22 @@ videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # high quality prese
 1080p60 → 120fps end-to-end (incl. software encoding): ~2 hours for a 10-minute source
 (~42 min interpolation + ~80 min x265 encoding).
 
+**Super-resolution** (Real-ESRGAN, per-frame, measured on RTX 4060 8GB; upscaling dominates the combined pipeline):
+
+| Target | Model | `tile` | Per-frame | Rate |
+|---|---|---|---|---|
+| 1080p→4K (exact 2×) | RealESRGAN_x2plus | 384 (auto) | ≈4.3 s | ≈0.23 fps |
+| 1080p→4K (exact 2×) | RealESRGAN_x2plus | 256 | ≈6.9 s | ≈0.14 fps |
+| 4K (x4 round-trip) | realesr-general-wdn-x4v3 | auto | slower (native x4 then resize) | — |
+
+> Combined end-to-end: for a 640×360 clip doing "interpolate 30→60 + upscale to 1280×720", 16 source frames → 32 frames took ≈**39s** (vs ≈**7.3s** for the interpolate-only v1 baseline) — super-resolution dominates and is far from real-time (offline heavy lifting). 4K/8K targets are dramatically slower; a high-end GPU is recommended.
+
 ## 🔧 How It Works
 
 1. Decode the source (PyAV); map every output frame to a source frame pair and in-between position (`alpha`) by timestamps
-2. Call RIFE single-step interpolation per pair (arbitrary `alpha` ⇒ arbitrary rate multiplier)
-3. When consecutive source frames differ beyond a threshold (scene cut), reuse the source frame directly to avoid ghosting
-4. Re-encode the output (x264/x265, audio passthrough) with atomic temp-file finalization
+2. Call RIFE single-step interpolation per pair (arbitrary `alpha` ⇒ arbitrary rate multiplier); when consecutive source frames differ beyond a threshold (scene cut), reuse the source frame directly to avoid ghosting
+3. **(optional super-res)** run Real-ESRGAN on each output frame to the target resolution (auto tiling, fp16, automatic tile reduction on OOM; integer scale uses the native scale, non-integer rounds up then resizes back)
+4. Re-encode the output (x264/x265, audio passthrough) with atomic temp-file finalization; fully frame-level in-memory streaming (no intermediate re-encode)
 
 ## 🛠️ Building
 
@@ -146,14 +162,16 @@ python build.py --installer  # also compile the Inno Setup installer (VideoRefin
 
 - This project: **MIT License** (see `LICENSE`)
 - Interpolation engine [RIFE](https://github.com/hzwer/ECCV2022-RIFE) ([Practical-RIFE](https://github.com/hzwer/Practical-RIFE)): MIT, by hzwer et al.; vendored under `third_party/` (see [third_party/README.md](third_party/README.md))
-- Pretrained model `rife4.26.pkl`: from [hzwer/RIFE](https://huggingface.co/hzwer/RIFE) (HuggingFace); distributed loosely by upstream — commercial products (SVP, SVFI) use it at scale. **When distributing commercially, keep the model attribution.**
+- Super-resolution engine [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (v0.3.x): BSD-3-Clause (code + pretrained weights both commercially usable); architectures vendored at `videorefiner/sr_archs.py` (no basicsr/realesrgan dependency)
+- Pretrained `rife4.26.pkl`: from [hzwer/RIFE](https://huggingface.co/hzwer/RIFE) (HuggingFace); super-res models (`realesr-general-wdn-x4v3` etc.) from [xinntao/Real-ESRGAN Releases](https://github.com/xinntao/Real-ESRGAN/releases) (HuggingFace mirror). **When distributing commercially, keep the model attributions.**
 
 ## 🚧 Limitations & Roadmap
 
-- v1 requires an NVIDIA GPU; non-NVIDIA support (ncnn backend) planned
-- 4K interpolation needs a high-end GPU (RTX 3080/4070+)
-- Scrolling-text scenes may occasionally flicker (de-flicker post-processing planned)
-- Performance roadmap: NVENC hardware encoding, TensorRT engine, batch optimization
+- v2 super-resolution is offline heavy lifting (not real-time): ≈0.14–0.23 fps for 1080p→4K; GUI resolution dropdown / stage progress (V2-4) in development, bundle-size optimization (V2-6) in progress
+- Per-frame super-resolution can cause slight **temporal flicker** (inherent to SISR, especially fine text/subtitles); temporal-consistency post-processing is planned
+- Requires an NVIDIA GPU; non-NVIDIA support (ncnn backend) planned
+- 4K/8K interpolation/upscaling needs a high-end GPU (RTX 3080/4070+)
+- Performance roadmap: NVENC hardware encoding, TensorRT engine, batch optimization, super-res tile tuning
 - No resume for interrupted jobs yet
 
 Questions or suggestions? Open an [Issue](https://github.com/Yuh-Hypnotized/VideoRefiner/issues)!

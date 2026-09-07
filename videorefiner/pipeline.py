@@ -13,13 +13,17 @@ S4 增强：
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
 from . import av_io
-from .engine import BlendEngine, FrameInterpolator
+from .engine import BlendEngine, FrameInterpolator, Upscaler
 from .remapper import is_scene_cut, plan_output_frames
+from .scale import compute_target_size
+
+# 帧率比较容差（浮点源帧率；目标需要 ≥ 源帧率）
+_FPS_EPS = 1e-9
 
 
 class Cancelled(Exception):
@@ -46,6 +50,32 @@ def _is_exact_2x(src_fps: float, dst_fps: float) -> bool:
     return abs(dst_fps - 2.0 * src_fps) <= 1e-6 * max(1.0, abs(dst_fps))
 
 
+def plan_pipeline_stages(
+    target_fps: float,
+    src_fps: float,
+    target_resolution: Optional[Tuple[int, int]],
+    src_resolution: Tuple[int, int],
+) -> List[str]:
+    """按两个目标生成阶段序列 ``[interpolate?, upscale?]``。
+
+    - 帧率目标 > 源帧率 → 含 ``interpolate``
+    - 分辨率目标 != 源分辨率 → 含 ``upscale``
+    - 两者都等于源值 → 抛 ``ValueError("参数与原视频一致，请修改")``
+    - 顺序恒为 ``interpolate`` → ``upscale``（先插帧原生分辨率，再超分）
+    """
+    target_resolution = target_resolution or src_resolution
+    needs_interp = target_fps > src_fps + _FPS_EPS
+    needs_upscale = tuple(target_resolution) != tuple(src_resolution)
+    if not needs_interp and not needs_upscale:
+        raise ValueError("参数与原视频一致，请修改")
+    stages: List[str] = []
+    if needs_interp:
+        stages.append("interpolate")
+    if needs_upscale:
+        stages.append("upscale")
+    return stages
+
+
 def run(
     input_path: str,
     output_path: str,
@@ -58,47 +88,87 @@ def run(
     scene_threshold: Optional[float] = DEFAULT_SCENE_THRESHOLD,
     use_fast_path: bool = True,
     unload_engine: bool = True,
+    *,
+    target_resolution: Optional[Tuple[int, int]] = None,
+    target_edge: Optional[int] = None,
+    upscaler: Optional[Upscaler] = None,
 ) -> PipelineResult:
-    """端到端插帧。输出先写 <output>.part，完成后原子改名。
+    """端到端处理管线（v2 可组合：插帧 / 超分 / 两者）。
 
-    unload_engine=False 时模型保持常驻（批量队列复用同一引擎，避免重复加载）。
+    ``target_resolution`` 为 (out_w, out_h)；``target_edge`` 为"档位长边"
+    （二选一，``target_edge`` 优先内部调用 :func:`compute_target_size`）。
+    只插帧完全复用 v1 路径；两者都等于源值时抛 ``ValueError``。
+    输出先写 <output>.part，完成后原子改名。
     """
+    from .upscaler import RealESRGANUpscaler  # 迟到导入：避免无超分使用时引入 torch 推理栈开销
+
     if engine is None:
         engine = BlendEngine()
-    engine.load()
 
     session = av_io.open_input(input_path)
     info = session.info
     source_fps = info.fps
-    if target_fps <= source_fps:
-        session.close()
-        engine.unload()
-        raise ValueError(f"目标帧率 {target_fps:g} 必须大于源帧率 {source_fps:g}")
+    src_w, src_h = info.width, info.height
 
-    plan = list(plan_output_frames(source_fps, target_fps, info.frame_count))
-    total = len(plan)
+    if target_fps < source_fps - _FPS_EPS:
+        session.close()
+        raise ValueError(f"目标帧率 {target_fps:g} 必须大于等于源帧率 {source_fps:g}")
+
+    # 解析目标分辨率：显式 (out_w,out_h) 或目标长边（内部等比计算）
+    if target_resolution is not None:
+        target_resolution = (int(target_resolution[0]), int(target_resolution[1]))
+    elif target_edge is not None:
+        target_resolution = compute_target_size(src_w, src_h, target_edge)
+
+    effective_res = None
+    if target_resolution is not None and target_resolution != (src_w, src_h):
+        effective_res = target_resolution
+
+    stages = plan_pipeline_stages(target_fps, source_fps, effective_res, (src_w, src_h))
+    needs_interp = "interpolate" in stages
+    needs_up = "upscale" in stages
+    out_w, out_h = effective_res or (src_w, src_h)
+
+    if needs_interp:
+        engine.load()
+    if needs_up:
+        if upscaler is None:
+            upscaler = RealESRGANUpscaler(progress_cb=getattr(engine, "download_progress_cb", None))
+        upscaler.load()
+
+    def write(frame: np.ndarray) -> None:
+        if needs_up:
+            frame = upscaler.upscale(frame, out_w, out_h)
+        out.write_frame(frame)
 
     out = av_io.OutputSession(
         output_path,
         target_fps,
-        info.width,
-        info.height,
+        out_w,
+        out_h,
         codec=codec,
         quality=quality,
         audio_template=session.audio_stream,
     )
 
     try:
-        if use_fast_path and _is_exact_2x(source_fps, target_fps):
+        if needs_interp and use_fast_path and _is_exact_2x(source_fps, target_fps):
             batch_size = getattr(engine, "batch_limit", 8)
+            plan = list(plan_output_frames(source_fps, target_fps, info.frame_count))
             _run_2x_streaming(
-                session, out, engine, info.frame_count, total,
-                progress_cb, should_cancel, scene_threshold, batch_size,
+                session, out, engine, info.frame_count, len(plan),
+                write, progress_cb, should_cancel, scene_threshold, batch_size,
             )
         else:
+            # 只超分：目标帧率 == 源帧率 → 1:1 复制源帧，逐帧超分
+            plan = list(
+                plan_output_frames(source_fps, target_fps, info.frame_count)
+                if needs_interp
+                else plan_output_frames(source_fps, source_fps, info.frame_count)
+            )
             _run_streaming(
-                session, out, engine, plan, total,
-                progress_cb, should_cancel, scene_threshold,
+                session, out, engine, plan, len(plan),
+                write, progress_cb, should_cancel, scene_threshold,
             )
         result_path = out.finish()
     except Cancelled:
@@ -109,8 +179,10 @@ def run(
         raise
     finally:
         session.close()
-        if unload_engine:
+        if unload_engine and needs_interp:
             engine.unload()
+        if unload_engine and needs_up:
+            upscaler.unload()
 
     return PipelineResult(
         input_path=input_path,
@@ -118,7 +190,7 @@ def run(
         source_fps=source_fps,
         target_fps=target_fps,
         source_frames=info.frame_count,
-        output_frames=total,
+        output_frames=len(plan),
     )
 
 
@@ -128,11 +200,15 @@ def _run_streaming(
     engine: FrameInterpolator,
     plan: List,
     total: int,
+    write: Callable[[np.ndarray], None],
     progress_cb: Optional[ProgressCallback],
     should_cancel: Optional[CancelCheck],
     scene_threshold: Optional[float],
 ) -> None:
-    """通用路径：按源帧顺序解码并尽可能早地生成输出帧；内存仅缓存最近 1~2 帧。"""
+    """通用路径：按源帧顺序解码并尽可能早地生成输出帧；内存仅缓存最近 1~2 帧。
+
+    每个即将写出的帧先经过 ``write``（可能做超分变换），再交给编码器。
+    """
     decoded: List[np.ndarray] = []
     base = 0
     next_emit = 0
@@ -145,15 +221,15 @@ def _run_streaming(
             if need > base + len(decoded) - 1:
                 break
             if e.copy:
-                out.write_frame(decoded[e.k - base])
+                write(decoded[e.k - base])
             else:
                 fa = decoded[e.k - base]
                 fb = decoded[e.k + 1 - base]
                 if scene_threshold is not None and is_scene_cut(fa, fb, scene_threshold):
                     # 场景切换：直接拷贝新场景帧，避免跨场景插值鬼影
-                    out.write_frame(fb.copy())
+                    write(fb.copy())
                 else:
-                    out.write_frame(engine.interpolate(fa, fb, e.alpha))
+                    write(engine.interpolate(fa, fb, e.alpha))
             next_emit += 1
             if progress_cb:
                 progress_cb(next_emit, total)
@@ -185,6 +261,7 @@ def _run_2x_streaming(
     engine: FrameInterpolator,
     est_frames: int,
     total: int,
+    write: Callable[[np.ndarray], None],
     progress_cb: Optional[ProgressCallback],
     should_cancel: Optional[CancelCheck],
     scene_threshold: Optional[float],
@@ -225,7 +302,7 @@ def _run_2x_streaming(
                     f = None
             if f is None:
                 break
-            out.write_frame(f)
+            write(f)
             emitted += 1
             if progress_cb:
                 progress_cb(emitted, total)

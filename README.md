@@ -1,23 +1,25 @@
-# VideoRefiner — AI 视频插帧工具
+# VideoRefiner — AI 视频插帧 + 超分工具
 
 <p align="center">
   <img src="assets/icon.png" width="120" alt="VideoRefiner">
 </p>
 
-**输入任意帧率的视频，输出更高帧率（如 60fps → 120fps）。只插入 AI 生成的新帧，不改动画面内容，让视频看起来更流畅。**
+**输入任意帧率的视频，输出更高帧率（如 60fps → 120fps）且/或更高分辨率（如 1080p → 4K）。只做 AI 生成/重建，不改动画面语义。插帧用 [RIFE](https://github.com/hzwer/ECCV2022-RIFE)，超分用 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)。**
 
-基于 [RIFE](https://github.com/hzwer/ECCV2022-RIFE)（光流插帧，MIT 许可）与 PySide6 桌面界面，支持任意源帧率 → 任意目标帧率（含 24→60 这类非整数倍）。
+基于 RIFE（光流插帧）、Real-ESRGAN（超分，均可商用，BSD-3/MIT）与 PySide6 桌面界面，支持任意源帧率 → 任意目标帧率（含 24→60 这类非整数倍），分辨率**等比不拉伸**放大。
 
 ## ✨ 功能
 
 - **AI 光流插帧**（RIFE v4.26）：在帧与帧之间生成自然过渡的中间帧，画面内容不变（语义不变，输出整体重编码）
+- **AI 超分/画质优化**（Real-ESRGAN v0.3.x）：逐帧提升分辨率（如 1080p→4K），**等比不拉伸**（竖屏/4:3/方形源不变形）；整数倍走模型原生倍率，非整数倍用"bicubic 往返 + 模型精修"
+- **双功能可组合**：帧率、分辨率两个目标都接受 `≥` 源值；等于源值时跳过该功能；都等于源值提示"参数与原视频一致，请修改"。组合时**先插帧（原生分辨率）→ 再超分**
 - **任意目标帧率**：默认 60→120，也可 24→60 / 30→120 / 任意组合（最高 1000fps）
 - **桌面 GUI（中文）**：拖拽/多文件队列、参数设置、实时进度与剩余时间、可取消、处理完成后一键对比播放（原视频 vs 插帧结果，双窗口同步）
 - **命令行入口**：`videorefiner <输入> --fps 120 -o <输出>`，便于脚本化
-- **自动管理模型**：首次运行自动下载模型（约 15MB，HuggingFace 镜像，支持离线放置）
+- **自动管理模型**：首次运行自动下载插帧（约 15MB）与超分（约 5MB 起）模型（HuggingFace 镜像，支持离线放置）
 - **场景切换保护**：剪辑点处直接沿用原帧，避免跨场景插值的鬼影
 - **音频直通**：原音轨原样保留
-- 质量保障：合成测试集 PSNR ≥ 32dB / SSIM ≥ 0.95（RIFE fp16 实测 48.6dB / 0.998）
+- 质量保障：插帧合成测试集 PSNR ≥ 32dB / SSIM ≥ 0.95（RIFE fp16 实测 48.6dB / 0.998）；超分 x2 实测 PSNR≈38.4/SSIM≈0.955、x4 实测 PSNR≈42.5/SSIM≈0.973（验收线见 `PRD.md`）
 
 ## ❓ 为什么要有这个产品？
 
@@ -52,7 +54,7 @@
 5. **内置对比播放**：双窗口同步播放原视频与结果，效果一目了然
 6. **中文界面**：面向中文创作者的友好体验
 
-**诚实的差距**：Topaz 的超分+插帧上限更高（但数百美元）；SVFI/Flowframes 生态更久、批处理与 GPU 优化（TensorRT 等）更成熟；剪映等手机 App 免费且随手可用，适合轻量场景。我们 v1 仅支持 NVIDIA GPU，打包体积较大（约 5GB，主要来自 PyTorch CUDA 运行时），无超分功能——这些都在后续计划中。
+**诚实的差距**：Topaz 的超分+插帧上限更高（但数百美元）；SVFI/Flowframes 生态更久、批处理与 GPU 优化（TensorRT 等）更成熟；剪映等手机 App 免费且随手可用，适合轻量场景。我们 v1 仅支持 NVIDIA GPU，打包体积较大（约 5GB，主要来自 PyTorch CUDA 运行时）——非 NVIDIA 支持与体积优化在后续计划中。
 
 ## 💻 系统要求
 
@@ -97,10 +99,14 @@ python -m videorefiner.cli in.mp4 --fps 120 -o out.mp4
 **CLI**：
 
 ```bash
-videorefiner input.mp4 --fps 120 -o output.mp4              # 60→120
+videorefiner input.mp4 --fps 120 -o output.mp4              # 60→120（只插帧）
 videorefiner input.mp4 --fps 60 --codec h264 -o out.mp4     # 指定编码
 videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # 高质量预设
+videorefiner input.mp4 --resolution 3840 -o out.mp4         # 只超分到 4K（--fps 设为源帧率）
+videorefiner input.mp4 --fps 120 --resolution 3840 -o out.mp4  # 先插帧到120，再超分到4K（等比不拉伸）
 ```
+
+> `--resolution` 以"档位长边"表示（如 2560=2K / 3840=4K / 7680=8K）。分辨率目标 `≥` 源尺寸；等于源值时仅插帧，等于源帧率时仅超分。GUI 的分辨率下拉与分阶段进度（V2-4）在开发中，先用 CLI 体验超分。
 
 ## ⚡ 性能（RTX 4060 Laptop 8GB 实测）
 
@@ -113,12 +119,22 @@ videorefiner input.mp4 --fps 240 --quality high -o out.mp4  # 高质量预设
 
 1080p60 → 120fps 端到端（含软件编码）：10 分钟素材约 2 小时（插帧约 42 分钟 + x265 编码约 80 分钟）。
 
+**超分**（Real-ESRGAN，逐帧，RTX 4060 8GB 实测；超分是组合管线的主要耗时项）：
+
+| 目标 | 模型 | `tile` | 单帧耗时 | 速率 |
+|---|---|---|---|---|
+| 1080p→4K（精确 2×） | RealESRGAN_x2plus | 384（自动） | ≈4.3 s | ≈0.23 fps |
+| 1080p→4K（精确 2×） | RealESRGAN_x2plus | 256 | ≈6.9 s | ≈0.14 fps |
+| 4K（x4 模型 往返） | realesr-general-wdn-x4v3 | 自动 | 更慢（x4 原生再缩放） | — |
+
+> 组合端到端：对 640×360 素材做"插帧 30→60 + 超分到 1280×720"，16 源帧→32 帧约 **39s**（同素材只插帧 v1 基线约 **7.3s**）——超分占绝对主导，实时性远低于插帧（非实时，属离线重活）。目标达 4K/8K 时显著变慢，建议高端 GPU。
+
 ## 🔧 工作原理
 
 1. 解码源视频（PyAV），按时间戳定位每个输出帧对应的源帧对与帧内位置（`alpha`）
-2. 对每对源帧调用 RIFE 单步插值（支持任意 `alpha`，即任意倍率）
-3. 相邻帧差异超阈值（场景切换）时直接沿用源帧，避免鬼影
-4. 输出整体重编码（x264/x265，音频直通），临时文件原子收尾
+2. 对每对源帧调用 RIFE 单步插值（支持任意 `alpha`，即任意倍率）；相邻帧差异超阈值（场景切换）时直接沿用源帧，避免鬼影
+3. **（可选超分）** 对每个输出帧调用 Real-ESRGAN 提升到目标分辨率（自动 tile 分块、fp16、显存不足自动降 tile；整数倍走原生倍率，非整数倍先放大再缩放回目标）
+4. 输出整体重编码（x264/x265，音频直通），临时文件原子收尾；全程帧级内存流式、不中途落盘
 
 ## 🛠️ 构建打包
 
@@ -134,14 +150,16 @@ python build.py --installer  # 再编译 Inno Setup 安装程序（VideoRefiner-
 
 - 本项目代码：**MIT License**（见 `LICENSE`）
 - 插帧引擎 [RIFE](https://github.com/hzwer/ECCV2022-RIFE)（[Practical-RIFE](https://github.com/hzwer/Practical-RIFE)）：MIT，作者黄峥（hzwer）等；vendored 于 `third_party/`（见 [third_party/README.md](third_party/README.md)）
-- 预训练模型 `rife4.26.pkl`：来源 [hzwer/RIFE](https://huggingface.co/hzwer/RIFE)（HuggingFace），模型随上游宽松分发；SVP、SVFI 等商业产品已有大规模商用先例。**商业分发时建议保留模型出处说明**
+- 超分引擎 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)（v0.3.x）：BSD-3-Clause（代码 + 预训练权重均可商用）；结构 vendored 于 `videorefiner/sr_archs.py`（不引入 basicsr/realesrgan 依赖）
+- 预训练模型 `rife4.26.pkl`：来源 [hzwer/RIFE](https://huggingface.co/hzwer/RIFE)（HuggingFace）；超分模型（`realesr-general-wdn-x4v3` 等）来源 [xinntao/Real-ESRGAN Releases](https://github.com/xinntao/Real-ESRGAN/releases)（HuggingFace 镜像）。**商业分发时建议保留模型出处说明**
 
 ## 🚧 已知限制与计划
 
+- v2 超分为离线重活（非实时）：1080p→4K 约 0.14–0.23 fps；GUI 分辨率下拉/分阶段进度（V2-4）开发中、打包体积优化（V2-6）进行中
+- 逐帧超分存在轻微**帧间闪烁/抖动**（SISR 固有，尤其细纹/字幕），计划加入时间一致性后处理
 - v1 要求 NVIDIA GPU；非 NVIDIA 支持（ncnn 后端）计划中
-- 4K 插帧需高端卡（RTX 3080/4070+）
-- 滚动字幕等细纹场景偶有闪烁（计划加入去闪烁后处理）
-- 提速方向：NVENC 硬件编码、TensorRT 引擎、批处理优化
+- 4K/8K 插帧/超分需高端卡（RTX 3080/4070+）
+- 提速方向：NVENC 硬件编码、TensorRT 引擎、批处理优化、超分 tile 调优
 - 断点续传暂不支持
 
 有任何问题或建议，欢迎提 [Issue](https://github.com/Yuh-Hypnotized/VideoRefiner/issues)！
