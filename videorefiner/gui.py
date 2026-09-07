@@ -1,13 +1,11 @@
-"""PySide6 桌面外壳（S5 单文件 + S6 串行批量队列 + 对比播放）。
+"""PySide6 桌面外壳（S5 单文件 + S6 串行批量队列 + 对比播放 + v2 超分）。
 
 结构（PRD 决策）：核心管线独立库 + CLI 薄壳 + GUI 外壳。
 处理在 QThread 中执行（不卡界面）；进度/状态经信号回传（排队连接）。
 
-功能：
-- 队列：拖拽/添加多个视频 → 文件信息（名称/分辨率/帧率/时长）→ 参数 →
-  串行逐个处理（模型只加载一次，常驻 GPU）→ 每个文件独立进度与状态 →
-  完成汇总；可取消当前项（清理临时文件）
-- 对比播放：QMediaPlayer 双窗口对齐播放原视频与输出视频（共享进度条）
+v2（V2-4）：分辨率动态预设下拉（不超分/2K/4K/8K，过滤 ≥ 源长边）、超分模型选择
+（通用/动漫）、实时校验（帧率与分辨率都等于源值 → 红字提示 + 禁用开始）、
+分阶段进度提示（阶段：插帧 → 超分）+ 4K/8K 警告。
 """
 
 from __future__ import annotations
@@ -49,6 +47,8 @@ from PySide6.QtMultimediaWidgets import QGraphicsVideoItem
 
 from . import av_io
 from .pipeline import Cancelled
+from .scale import compute_target_size
+from .pipeline import plan_pipeline_stages
 
 VIDEO_EXTS = {
     ".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v",
@@ -57,12 +57,52 @@ VIDEO_EXTS = {
 QUALITY_NAMES = {"均衡": "balanced", "高质量": "high", "小体积": "small"}
 CODEC_NAMES = {"H.265（推荐）": "h265", "H.264": "h264"}
 
+# 分辨率预设（"档位长边"）：None = 不超分（= 源分辨率）
+RES_PRESETS = [
+    ("不超分（= 源分辨率）", None),
+    ("2K（2560）", 2560),
+    ("4K（3840）", 3840),
+    ("8K（7680）", 7680),
+]
+# 超分模型预设
+SR_MODEL_NAMES = {"通用（默认）": "realesr-general-wdn-x4v3", "动漫": "RealESRGAN_x4plus_anime_6B"}
+
 PROJECT_URL = "https://github.com/Yuh-Hypnotized/VideoRefiner"
 
 
 def _fmt_seconds(sec: float) -> str:
     sec = max(0, int(sec))
     return f"{sec // 60}:{sec % 60:02d}"
+
+
+def _long_edge(w: int, h: int) -> int:
+    return max(int(w), int(h))
+
+
+def _res_presets_for(source_edge: int | None) -> list[tuple[str, int | None]]:
+    """针对源长边过滤分辨率预设：不超分 + 只保留 > 源长边的档位（PRD/03）。
+
+    ``source_edge`` 为 None（未知）时返回全部。
+    """
+    out: list[tuple[str, int | None]] = [("不超分（= 源分辨率）", None)]
+    for label, edge in RES_PRESETS[1:]:
+        if source_edge is None or edge > source_edge:
+            out.append((label, edge))
+    return out
+
+
+def _item_is_noop(target_fps: float, target_edge: int | None, src_fps: float, src_w: int, src_h: int) -> bool:
+    """判断该文件在给定目标下是否"无任何操作"（插帧与超分都会被跳过）。"""
+    effective = None
+    if target_edge is not None:
+        res = compute_target_size(src_w, src_h, target_edge)
+        if res != (src_w, src_h):
+            effective = res
+    try:
+        stages = plan_pipeline_stages(target_fps, src_fps, effective, (src_w, src_h))
+    except ValueError:
+        return True  # 两者都等于源值 → 无操作
+    return not stages
 
 
 class QueueItem:
@@ -73,6 +113,9 @@ class QueueItem:
         self.label = label       # 列表显示文本（名称+信息）
         self.output = output
         self.status = "等待"     # 等待/处理中/完成/失败/已取消
+        self.src_fps: float | None = None   # 源帧率
+        self.src_w: int | None = None       # 源宽
+        self.src_h: int | None = None       # 源高
 
 
 class BatchWorker(QObject):
@@ -93,6 +136,8 @@ class BatchWorker(QObject):
         codec: str,
         quality: str,
         scene_threshold: float,
+        target_edge: int | None = None,
+        sr_model: str = "realesr-general-wdn-x4v3",
         parent=None,
     ):
         super().__init__(parent)
@@ -101,21 +146,39 @@ class BatchWorker(QObject):
         self.codec = codec
         self.quality = quality
         self.scene_threshold = scene_threshold
+        self.target_edge = target_edge
+        self.sr_model = sr_model
         self._cancel = threading.Event()
 
     def cancel(self) -> None:
         self._cancel.set()
 
-    def run(self) -> None:
+    def _load_engines(self, need_interp: bool, need_upscale: bool):
+        """按需加载插帧/超分引擎（各一次、常驻；不同时驻留多个超分权重）。"""
         from .rife import RifeEngine
+        from .upscaler import RealESRGANUpscaler
+
+        if need_interp and self._engine is None:
+            self.status.emit("正在加载插帧模型…")
+            self._engine = RifeEngine(download_progress_cb=self._on_model_progress)
+            self._engine.load()
+        if need_upscale and self._upscaler is None:
+            self.status.emit("正在加载超分模型…")
+            self._upscaler = RealESRGANUpscaler(
+                model_name=self.sr_model, download_progress_cb=self._on_model_progress
+            )
+            self._upscaler.load()
+        return need_interp, need_upscale
+
+    def run(self) -> None:
+        import av  # PyAV（判断源信息）
 
         from .pipeline import run as pipeline_run
 
+        self._engine = None
+        self._upscaler = None
         stats = {"ok": 0, "fail": 0, "cancelled": 0, "skipped": 0}
-        engine = RifeEngine(download_progress_cb=self._on_model_progress)
         try:
-            self.status.emit("正在加载模型…")
-            engine.load()
             for i, item in enumerate(self.items):
                 if self._cancel.is_set():
                     item.status = "等待"
@@ -124,16 +187,50 @@ class BatchWorker(QObject):
                 self.item_started.emit(i, item.label)
                 item.status = "处理中"
                 try:
+                    # 探测源信息 + 计算阶段
+                    sess = av.open(item.path)
+                    v = next((s for s in sess.streams if s.type == "video"), None)
+                    if v is None:
+                        raise ValueError("输入文件没有视频流")
+                    src_fps = float(v.average_rate) if v.average_rate else 30.0
+                    src_w, src_h = v.codec_context.width, v.codec_context.height
+                    sess.close()
+
+                    effective_res = None
+                    if self.target_edge is not None:
+                        res = compute_target_size(src_w, src_h, self.target_edge)
+                        if res != (src_w, src_h):
+                            effective_res = res
+                    try:
+                        stages = plan_pipeline_stages(self.target_fps, src_fps, effective_res, (src_w, src_h))
+                    except ValueError:
+                        item.status = "跳过（参数与原视频一致）"
+                        stats["skipped"] += 1
+                        continue
+                    if not stages:
+                        item.status = "跳过（参数与原视频一致）"
+                        stats["skipped"] += 1
+                        continue
+
+                    need_interp = "interpolate" in stages
+                    need_upscale = "upscale" in stages
+                    self._load_engines(need_interp, need_upscale)
+
+                    stage_desc = "插帧 → 超分" if (need_interp and need_upscale) else ("插帧" if need_interp else "超分")
+                    self.status.emit(f"阶段：{stage_desc}")
+
                     result = pipeline_run(
                         item.path,
                         item.output,
                         self.target_fps,
                         codec=self.codec,
                         quality=self.quality,
-                        engine=engine,
+                        engine=self._engine if need_interp else None,
+                        upscaler=self._upscaler if need_upscale else None,
                         progress_cb=lambda d, t, _i=i: self.item_progress.emit(_i, d, t),
                         should_cancel=self._cancel.is_set,
                         scene_threshold=self.scene_threshold,
+                        target_resolution=effective_res,
                         unload_engine=False,
                     )
                     item.status = "完成"
@@ -149,7 +246,10 @@ class BatchWorker(QObject):
                     stats["fail"] += 1
                     self.item_failed.emit(i, f"{type(exc).__name__}: {exc}")
         finally:
-            engine.unload()
+            if self._engine is not None:
+                self._engine.unload()
+            if self._upscaler is not None:
+                self._upscaler.unload()
         self.queue_finished.emit(stats)
 
     def _on_model_progress(self, done: int, total: int) -> None:
@@ -301,8 +401,11 @@ class MainWindow(QWidget):
         self._items: list[QueueItem] = []
         self._start_time = 0.0
         self._out_dir: str | None = None
+        self._params_invalid = False
 
         self._build_ui()
+        self._refresh_res_combo(None)  # 初始：全部档位
+        self._validate_params()
         self._check_gpu()
         self._update_buttons()
 
@@ -341,6 +444,9 @@ class MainWindow(QWidget):
         self.fps_spin.setRange(2, 1000)
         self.fps_spin.setValue(120)
         self.fps_spin.setSuffix(" fps")
+        self.res_combo = QComboBox()
+        self.res_combo.setToolTip("目标分辨率（档位长边）；选择「不超分」则保持源分辨率不变")
+        self.sr_model_combo = _combo(SR_MODEL_NAMES)
         self.codec_combo = _combo(CODEC_NAMES)
         self.quality_combo = _combo(QUALITY_NAMES)
         out_row = QHBoxLayout()
@@ -352,10 +458,22 @@ class MainWindow(QWidget):
         out_row.addWidget(self.out_edit, 1)
         out_row.addWidget(out_btn)
         form.addRow("目标帧率：", self.fps_spin)
+        form.addRow("目标分辨率：", self.res_combo)
+        form.addRow("超分模型：", self.sr_model_combo)
         form.addRow("输出编码：", self.codec_combo)
         form.addRow("质量预设：", self.quality_combo)
         form.addRow("输出目录：", out_row)
+        # 实时校验提示（红字）
+        self.param_hint = QLabel("")
+        self.param_hint.setWordWrap(True)
+        form.addRow("", self.param_hint)
         root.addWidget(param_group)
+
+        # 参数变更 / 队列选择 → 更新提示与允许开始
+        self.fps_spin.valueChanged.connect(self._on_param_changed)
+        self.res_combo.currentIndexChanged.connect(self._on_param_changed)
+        self.sr_model_combo.currentIndexChanged.connect(self._on_param_changed)
+        self.queue_list.currentRowChanged.connect(self._on_selection_changed)
 
         # 进度
         self.progress_bar = QProgressBar()
@@ -389,9 +507,17 @@ class MainWindow(QWidget):
 
     # ---------- 队列操作 ----------
 
-    def _default_output(self, src_path: str) -> str:
+    def _current_edge(self) -> int | None:
+        """读取目标分辨率下拉当前值（长边；None=不超分）。"""
+        return self.res_combo.currentData() if self.res_combo.count() else None
+
+    def _default_output(self, src_path: str, src_w: int | None = None, src_h: int | None = None) -> str:
         src = Path(src_path)
-        name = f"{src.stem}_{self.fps_spin.value()}fps.mp4"
+        edge = self._current_edge()
+        name = f"{src.stem}_{self.fps_spin.value()}fps"
+        if edge and (src_w is None or edge > _long_edge(src_w, src_h)):
+            name += f"_{edge}px"
+        name += ".mp4"
         if self._out_dir:
             return str(Path(self._out_dir) / name)
         return str(src.with_name(name))
@@ -399,6 +525,7 @@ class MainWindow(QWidget):
     def _add_file(self, path: str) -> None:
         if Path(path).suffix.lower() not in VIDEO_EXTS:
             return
+        item = QueueItem(path, "", "")
         try:
             sess = av_io.open_input(path)
             info = sess.info
@@ -407,11 +534,16 @@ class MainWindow(QWidget):
             label = f"{Path(path).name} ｜ {info.width}×{info.height} ｜ {info.fps:.3g}fps ｜ 约 {_fmt_seconds(dur)}"
             if info.width >= 3840 or info.height >= 2160:
                 label += " ｜ ⚠4K（建议 RTX 3080/4070+）"
+            item.src_fps = info.fps
+            item.src_w = info.width
+            item.src_h = info.height
         except Exception:
             label = f"{Path(path).name} ｜ 无法读取"
-        item = QueueItem(path, label, self._default_output(path))
+        item.label = label
+        item.output = self._default_output(path, item.src_w, item.src_h)
         self._items.append(item)
         self._refresh_list()
+        self._validate_params()
 
     def _refresh_list(self) -> None:
         self.queue_list.clear()
@@ -431,11 +563,13 @@ class MainWindow(QWidget):
         for row in sorted({i.row() for i in self.queue_list.selectedItems()}, reverse=True):
             del self._items[row]
         self._refresh_list()
+        self._validate_params()
 
     def _clear_queue(self) -> None:
         self._items.clear()
         self._refresh_list()
         self._reset_progress()
+        self._validate_params()
 
     def _choose_out_dir(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "选择输出目录")
@@ -443,7 +577,72 @@ class MainWindow(QWidget):
             self._out_dir = d
             self.out_edit.setText(d)
             for item in self._items:
-                item.output = self._default_output(item.path)
+                item.output = self._default_output(item.path, item.src_w, item.src_h)
+
+    # ---------- 参数提示 / 校验 ----------
+
+    def _reference_item(self) -> QueueItem | None:
+        """校验参考项：优先当前选中项，否则第一个待处理项。"""
+        row = self.queue_list.currentRow()
+        if 0 <= row < len(self._items):
+            return self._items[row]
+        for item in self._items:
+            if item.status in ("等待", "失败", "已取消"):
+                return item
+        return None
+
+    def _refresh_res_combo(self, reference: QueueItem | None) -> None:
+        source_edge = _long_edge(reference.src_w, reference.src_h) if reference and reference.src_w else None
+        presets = _res_presets_for(source_edge)
+        current = self._current_edge()
+        self.res_combo.blockSignals(True)
+        self.res_combo.clear()
+        for label, edge in presets:
+            self.res_combo.addItem(label, edge)
+        # 恢复原选择；若该档位不再可用（≤源长边）则回落到"不超分"
+        idx = self.res_combo.findData(current)
+        self.res_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.res_combo.blockSignals(False)
+
+    def _validate_params(self) -> None:
+        ref = self._reference_item()
+        edge = self._current_edge()
+        msg = ""
+        invalid = False
+        warn = False
+        if ref is not None and ref.src_fps is not None:
+            if self.fps_spin.value() < ref.src_fps - 1e-6:
+                msg = f"目标帧率（{self.fps_spin.value()}）低于源帧率（{ref.src_fps:.3g}），请修改"
+                invalid = True
+            elif _item_is_noop(self.fps_spin.value(), edge, ref.src_fps, ref.src_w, ref.src_h):
+                msg = "参数与原视频一致，请修改（帧率与分辨率都等于源值）"
+                invalid = True
+            elif edge is not None and edge >= 3840:
+                msg = "⚠ 4K/8K 目标分辨率很吃显存与时间，建议 RTX 3080/4070+"
+                warn = True
+            elif _long_edge(ref.src_w, ref.src_h) >= 3840:
+                msg = "⚠ 源为 4K，处理较慢，建议 RTX 3080/4070+"
+                warn = True
+        self._params_invalid = invalid
+        if invalid:
+            self.param_hint.setStyleSheet("color: #c00000;")
+        elif warn:
+            self.param_hint.setStyleSheet("color: #b06000;")
+        else:
+            self.param_hint.setStyleSheet("")
+        self.param_hint.setText(msg)
+        self._update_buttons()
+
+    def _on_param_changed(self) -> None:
+        # 参数变化：刷新待处理项的输出路径 + 校验
+        for item in self._items:
+            if item.status in ("等待", "失败", "已取消"):
+                item.output = self._default_output(item.path, item.src_w, item.src_h)
+        self._validate_params()
+
+    def _on_selection_changed(self) -> None:
+        self._refresh_res_combo(self._reference_item())
+        self._validate_params()
 
     def _on_double_click(self, item) -> None:
         row = self.queue_list.row(item)
@@ -473,13 +672,16 @@ class MainWindow(QWidget):
         if not self._items:
             QMessageBox.warning(self, "提示", "请先添加视频文件")
             return
+        if self._params_invalid:
+            QMessageBox.warning(self, "提示", self.param_hint.text() or "参数无效，请修改后再开始")
+            return
         if not any(i.status in ("等待", "失败", "已取消") for i in self._items):
             QMessageBox.information(self, "提示", "队列中没有待处理项目")
             return
         # 更新输出路径（用户可能改过帧率/目录）
         for item in self._items:
             if item.status in ("等待", "失败", "已取消"):
-                item.output = self._default_output(item.path)
+                item.output = self._default_output(item.path, item.src_w, item.src_h)
 
         self._thread = QThread(self)
         self._worker = BatchWorker(
@@ -488,6 +690,8 @@ class MainWindow(QWidget):
             codec=CODEC_NAMES[self.codec_combo.currentText()],
             quality=QUALITY_NAMES[self.quality_combo.currentText()],
             scene_threshold=30.0,
+            target_edge=self._current_edge(),
+            sr_model=SR_MODEL_NAMES[self.sr_model_combo.currentText()],
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -572,7 +776,7 @@ class MainWindow(QWidget):
 
     def _update_buttons(self) -> None:
         running = self._thread is not None and self._thread.isRunning()
-        self.start_btn.setEnabled(not running)
+        self.start_btn.setEnabled(not running and not self._params_invalid)
         self.cancel_btn.setEnabled(running)
         has_done = any(i.status == "完成" for i in self._items)
         self.compare_btn.setEnabled(not running and has_done)

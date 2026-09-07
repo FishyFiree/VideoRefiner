@@ -116,7 +116,7 @@ videorefiner input.mp4 --resolution 3840 -o out.mp4         # upscale only to 4K
 videorefiner input.mp4 --fps 120 --resolution 3840 -o out.mp4  # interpolate to 120 then upscale to 4K (aspect-preserving)
 ```
 
-> `--resolution` uses the "target long edge" (e.g. 2560=2K / 3840=4K / 7680=8K). The resolution target must be `≥` the source; equal → interpolation only; equal to the source fps → upscaling only. The GUI's resolution dropdown and stage progress (V2-4) are in development — use the CLI for super-resolution for now.
+> `--resolution` uses the "target long edge" (e.g. 2560=2K / 3840=4K / 7680=8K). The resolution target must be `≥` the source; equal → interpolation only; equal to the source fps → upscaling only. The GUI also has a resolution dropdown (auto-filtered to ≥ source), a super-res model choice, real-time validation and stage-progress hints.
 
 ## ⚡ Performance (measured on RTX 4060 Laptop 8GB)
 
@@ -167,7 +167,7 @@ python build.py --installer  # also compile the Inno Setup installer (VideoRefin
 
 ## 🚧 Limitations & Roadmap
 
-- v2 super-resolution is offline heavy lifting (not real-time): ≈0.14–0.23 fps for 1080p→4K; GUI resolution dropdown / stage progress (V2-4) in development, bundle-size optimization (V2-6) in progress
+- v2 super-resolution is offline heavy lifting (not real-time): ≈0.14–0.23 fps for 1080p→4K; bundle-size optimization (V2-6) in progress, the Inno Setup installer needs rebuilding
 - Per-frame super-resolution can cause slight **temporal flicker** (inherent to SISR, especially fine text/subtitles); temporal-consistency post-processing is planned
 - Requires an NVIDIA GPU; non-NVIDIA support (ncnn backend) planned
 - 4K/8K interpolation/upscaling needs a high-end GPU (RTX 3080/4070+)
