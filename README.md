@@ -54,12 +54,12 @@
 5. **内置对比播放**：双窗口同步播放原视频与结果，效果一目了然
 6. **中文界面**：面向中文创作者的友好体验
 
-**诚实的差距**：Topaz 的超分+插帧上限更高（但数百美元）；SVFI/Flowframes 生态更久、批处理与 GPU 优化（TensorRT 等）更成熟；剪映等手机 App 免费且随手可用，适合轻量场景。我们 v1 仅支持 NVIDIA GPU，打包体积较大（约 5GB，主要来自 PyTorch CUDA 运行时）——非 NVIDIA 支持与体积优化在后续计划中。
+**诚实的差距**：Topaz 的超分+插帧上限更高（但数百美元）；SVFI/Flowframes 生态更久、批处理与 GPU 优化（TensorRT 等）更成熟；剪映等手机 App 免费且随手可用，适合轻量场景。我们目前仅支持 NVIDIA GPU，打包体积较大（约 5GB，主要来自 PyTorch CUDA 运行时）——非 NVIDIA 支持与体积优化在后续计划中。
 
 ## 💻 系统要求
 
 - **Windows 10/11**（x64）
-- **NVIDIA GPU**（v1 必需，CUDA）：
+- **NVIDIA GPU**（必需，CUDA）：
   - 最低：GTX 1660 6GB（1080p 可用，较慢）
   - 推荐：RTX 3060 8GB 及以上（1080p 近实时）
   - 高性能：RTX 3080/4070+（4K 顺畅）
@@ -157,7 +157,7 @@ python build.py --installer  # 再编译 Inno Setup 安装程序（VideoRefiner-
 
 - v2 超分为离线重活（非实时）：1080p→4K 约 0.14–0.23 fps；打包体积优化（V2-6）进行中、Inno Setup 安装程序需重建
 - 逐帧超分存在轻微**帧间闪烁/抖动**（SISR 固有，尤其细纹/字幕），计划加入时间一致性后处理
-- v1 要求 NVIDIA GPU；非 NVIDIA 支持（ncnn 后端）计划中
+- 要求 NVIDIA GPU；非 NVIDIA 支持（ncnn 后端）计划中
 - 4K/8K 插帧/超分需高端卡（RTX 3080/4070+）
 - 提速方向：NVENC 硬件编码、TensorRT 引擎、批处理优化、超分 tile 调优
 - 断点续传暂不支持

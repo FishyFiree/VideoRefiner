@@ -66,7 +66,7 @@ CUDA runtime) — non-NVIDIA support and bundle-size optimization are on the roa
 ## 💻 System Requirements
 
 - **Windows 10/11** (x64)
-- **NVIDIA GPU** (required in v1, CUDA):
+- **NVIDIA GPU** (required, CUDA):
   - Minimum: GTX 1660 6GB (1080p usable, slow)
   - Recommended: RTX 3060 8GB+ (near-real-time 1080p)
   - High-end: RTX 3080/4070+ (smooth 4K)

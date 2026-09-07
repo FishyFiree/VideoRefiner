@@ -793,7 +793,7 @@ class MainWindow(QWidget):
 
             if not torch.cuda.is_available():
                 self.status_label.setText(
-                    "⚠ 未检测到 NVIDIA GPU（CUDA）——v1 需要 NVIDIA GPU 才能使用 AI 插帧引擎（RIFE）"
+                    "⚠ 未检测到 NVIDIA GPU（CUDA）——本项目需要 NVIDIA GPU 才能使用 AI 插帧/超分引擎（RIFE + Real-ESRGAN）"
                 )
                 self.status_label.setStyleSheet("color: #b06000;")
         except ImportError:
