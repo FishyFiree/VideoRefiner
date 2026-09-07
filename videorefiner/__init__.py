@@ -4,4 +4,4 @@
 （语义不变，输出整体重编码）。详见 PRD（.scratch/video-interpolation/PRD.md）。
 """
 
-__version__ = "0.2.0"
+__version__ = "2.0.0"

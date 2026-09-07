@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "videorefiner"
-version = "0.2.0"
+version = "2.0.0"
 description = "AI 视频插帧 + 超分工具：输入任意帧率/分辨率视频，输出更高帧率且/或更高分辨率，只做 AI 生成/重建不改语义"
 requires-python = ">=3.11"
 dependencies = [
