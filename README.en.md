@@ -40,7 +40,7 @@ the motion gets smoother**. Free, open source, and ready to use out of the box �
 
 | Tool | Price | Algorithm | Arbitrary fps | Scene protection | Batch | Model management | UI | Best for |
 |---|---|---|---|---|---|---|---|---|
-| **VideoRefiner (this project)** | **Free · OSS (MIT)** | RIFE v4.26 | ✅ (incl. 24→60) | ✅ automatic | ✅ serial queue | ✅ auto-download + offline | ✅ Chinese GUI | Short-video creators |
+| **VideoRefiner (this project)** | **Free · OSS (MIT)** | RIFE v4.26 + Real-ESRGAN | ✅ (incl. 24→60) | ✅ automatic | ✅ serial queue | ✅ auto-download + offline | ✅ Chinese GUI | Short-video creators |
 | CapCut / Douyin etc. | Free | built-in (only when slow-mo) | ❌ no standalone upscaling | no | no | n/a | mobile app | Light casual use |
 | [Topaz Video AI](https://costbench.com/software/ai-video-generators/topaz-video-ai/) | $299 + $99/yr updates | proprietary (upscale+interp) | ✅ | yes | ✅ | built-in | English GUI | Professionals with budget |
 | [SVFI](https://store.steampowered.com/app/1692080/SVFI/) (Steam) | Paid (Steam) | RIFE family | ✅ | yes | ✅ | built-in | mostly English | Power users willing to pay |

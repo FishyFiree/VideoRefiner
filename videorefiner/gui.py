@@ -286,7 +286,7 @@ class CompareDialog(QDialog):
 
     def __init__(self, original: str, output: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("对比播放 — 原视频 vs 插帧结果")
+        self.setWindowTitle("对比播放 — 原视频 vs 处理结果")
         self.resize(1000, 620)
         self._seeking = False
 
@@ -391,7 +391,7 @@ def _app_icon() -> QIcon:
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("VideoRefiner — AI 视频插帧")
+        self.setWindowTitle("VideoRefiner — AI 视频插帧 + 超分")
         self.setWindowIcon(_app_icon())
         self.setAcceptDrops(True)
         self.setMinimumWidth(600)
@@ -447,6 +447,10 @@ class MainWindow(QWidget):
         self.res_combo = QComboBox()
         self.res_combo.setToolTip("目标分辨率（档位长边）；选择「不超分」则保持源分辨率不变")
         self.sr_model_combo = _combo(SR_MODEL_NAMES)
+        self.sr_model_combo.setToolTip(
+            "超分模型：通用（写实视频/照片，默认）｜动漫（动漫/插画/线稿风格更贴合）。\n"
+            "写实素材用「通用」、动漫素材用「动漫」，效果最佳；不确定就用默认。"
+        )
         self.codec_combo = _combo(CODEC_NAMES)
         self.quality_combo = _combo(QUALITY_NAMES)
         out_row = QHBoxLayout()

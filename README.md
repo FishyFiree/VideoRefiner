@@ -37,7 +37,7 @@
 
 | 产品 | 价格 | 插帧算法 | 任意帧率 | 场景保护 | 批量 | 模型管理 | 界面 | 适合人群 |
 |---|---|---|---|---|---|---|---|---|
-| **VideoRefiner（本项目）** | **免费·开源(MIT)** | RIFE v4.26 | ✅（含 24→60 非整数倍） | ✅ 自动 | ✅ 串行队列 | ✅ 自动下载+离线 | ✅ 中文 GUI | 短视频创作者、二次元/游戏录像 |
+| **VideoRefiner（本项目）** | **免费·开源(MIT)** | RIFE v4.26 + Real-ESRGAN | ✅（含 24→60 非整数倍） | ✅ 自动 | ✅ 串行队列 | ✅ 自动下载+离线 | ✅ 中文 GUI | 短视频创作者、二次元/游戏录像 |
 | [剪映 / 抖音](https://www.douyin.com/shipin/7300910419244386343) 等手机剪辑 | 免费 | 内置（仅慢放时补帧） | ❌ 无独立升帧 | 无 | 无 | 无 | 手机 App | 随手轻量场景 |
 | [Topaz Video AI](https://costbench.com/software/ai-video-generators/topaz-video-ai/) | $299 永久 + $99/年更新 | 自研（超分+插帧） | ✅ | 有 | ✅ | 内置 | 英文 GUI | 专业后期，预算充足 |
 | [SVFI](https://store.steampowered.com/app/1692080/SVFI/)（Steam） | 付费（Steam 销售） | RIFE 系 | ✅ | 有 | ✅ | 内置 | 英文为主 | 愿意付费的重度用户 |
