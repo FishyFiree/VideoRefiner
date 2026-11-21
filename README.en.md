@@ -149,25 +149,30 @@ videorefiner input.mp4 --fps 120 --resolution 2560 --model realesrgan -o output.
 
 ## ⚡ Performance (measured on RTX 4060 Laptop 8GB, torch 2.11+cu128)
 
+> **Targeted speedups applied** (same-process A/B measured): `cudnn.benchmark` (fastest conv algorithms) + `channels_last` memory format; images are transferred to the GPU as **uint8** and cast there (4× less H2D bandwidth); RIFE does **adaptive batching** (up to ~3× at low resolution) and the non-2× general path batches too; encode presets moved up one notch.
+> Measured: **Real-ESRGAN ≈2.1× faster**, **RIFE single-frame ≈1.1×** (1080p; batching is clearly faster at ≤720p). Absolute timings vary with GPU thermals/load (±30%) — magnitudes are indicative.
+
 ### Interpolation (RIFE, fp16)
-| Resolution | Per-frame interpolation | Processing speed |
+| Resolution | Per-frame interpolation (approx) | Processing speed (approx) |
 |---|---|---|
-| 640×360 | 27 ms | 37 fps |
-| 1280×720 | 36 ms | 28 fps |
-| 1920×1080 | 70 ms | 14.4 fps |
-| 3840×2160 | 320 ms | 3.1 fps |
+| 640×360 | ~30 ms | ~30 fps |
+| 1280×720 | ~45 ms | ~22 fps |
+| 1920×1080 | ~65–90 ms | ~12–15 fps |
+| 3840×2160 | ~280 ms | ~3.6 fps |
 
 ### Super-resolution (Real-ESRGAN, per-frame; dominates the composite pipeline)
-| Target | Model | `tile` | Per-frame | Rate |
-|---|---|---|---|---|
-| 1080p→4K (exact 2×) | RealESRGAN_x2plus | 384 (auto) | ≈4.3 s | ≈0.23 fps |
-| 1080p→4K (exact 2×) | RealESRGAN_x2plus | 256 | ≈6.9 s | ≈0.14 fps |
-| 4K (x4 round-trip, non-integer) | realesr-general-wdn-x4v3 | auto | slower | — |
+| Target | Model | Notes |
+|---|---|---|
+| 1080p→4K (near 2×) | realesr-general-wdn-x4v3 (default, x4 round-trip) | ≈**0.4–0.6 s/frame** (~1.8–2.6 fps); ≈2–3× faster than `RealESRGAN_x2plus` |
+| Anime content | RealESRGAN_x4plus_anime_6B | lightweight (6 blocks), faster |
+| Exact 2× (quality-first) | RealESRGAN_x2plus | better quality but slower |
 
-### Composite end-to-end
-For a 640×360 clip doing "interpolate 30→60 + upscale to 1280×720", 16 source frames → 32 frames took ≈**39s** (vs ≈**7.3s** for the interpolate-only v1 baseline) — **super-resolution dominates** and is offline heavy lifting (not real-time). 4K/8K targets are dramatically slower; a high-end GPU is recommended. A larger `tile` (when VRAM allows) is faster; use 384 for 4K.
+### Composite end-to-end (estimates)
+- **Interpolate only** 1080p 60→120: ~10–15 output fps → ~2–3 min per 1-min source.
+- **Upscale only** 1080p→4K: ~1.5–2.5 fps → ~4–8 min per 1-min source (super-resolution is offline heavy lifting, not real-time).
+- **Interpolate + upscale**: dominated by super-resolution; roughly the sum of both.
 
-> Note: interpolation is unchanged from v1; super-resolution is the bottleneck (~0.14–0.23 fps for 1080p→4K). The GUI's progress/ETA is estimated from measured frame rates.
+> Note: super-resolution is the bottleneck (Real-ESRGAN itself is not real-time); encoding is CPU-heavy — `--quality small` or `--codec h264` (≈1.3× faster than h265) speed it up further. VRAM is bounded by tiling with automatic down-tile on OOM. **The first run at a given resolution pays a one-time cudnn autotune (~10–15 s), constant afterwards.**
 
 ---
 
