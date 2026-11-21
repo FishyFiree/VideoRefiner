@@ -216,31 +216,54 @@ def _run_streaming(
     def emit_all_possible() -> None:
         nonlocal next_emit, base
         while next_emit < total:
-            e = plan[next_emit]
-            need = e.k if e.copy else e.k + 1
-            if need > base + len(decoded) - 1:
+            avail_last = base + len(decoded) - 1
+            # 收集一段"已就绪"的连续输出帧，插帧请求合并成一批（复用 batch 提速）
+            run = []
+            j = next_emit
+            while j < total:
+                e = plan[j]
+                need = e.k if e.copy else e.k + 1
+                if need > avail_last:
+                    break
+                run.append(e)
+                j += 1
+            if not run:
                 break
-            if e.copy:
-                write(decoded[e.k - base])
-            else:
-                fa = decoded[e.k - base]
-                fb = decoded[e.k + 1 - base]
-                if scene_threshold is not None and is_scene_cut(fa, fb, scene_threshold):
-                    # 场景切换：直接拷贝新场景帧，避免跨场景插值鬼影
-                    write(fb.copy())
+            out_frames: dict[int, np.ndarray] = {}
+            interp_idx: list[int] = []
+            for ri, e in enumerate(run):
+                if e.copy:
+                    out_frames[ri] = decoded[e.k - base]
                 else:
-                    write(engine.interpolate(fa, fb, e.alpha))
-            next_emit += 1
-            if progress_cb:
-                progress_cb(next_emit, total)
-            if should_cancel and should_cancel():
-                raise Cancelled()
-        if next_emit < total:
-            keep_from = plan[next_emit].k
-            drop = keep_from - base
-            if drop > 0:
-                del decoded[:drop]
-                base = keep_from
+                    fa = decoded[e.k - base]
+                    fb = decoded[e.k + 1 - base]
+                    if scene_threshold is not None and is_scene_cut(fa, fb, scene_threshold):
+                        # 场景切换：直接拷贝新场景帧，避免跨场景插值鬼影
+                        out_frames[ri] = fb.copy()
+                    else:
+                        interp_idx.append(ri)
+            if interp_idx:
+                pairs = [
+                    (decoded[run[ri].k - base], decoded[run[ri].k + 1 - base])
+                    for ri in interp_idx
+                ]
+                ts = [run[ri].alpha for ri in interp_idx]
+                results = engine.interpolate_batch(pairs, ts)
+                for ri, fr in zip(interp_idx, results):
+                    out_frames[ri] = fr
+            for ri in range(len(run)):
+                write(out_frames[ri])
+                next_emit += 1
+                if progress_cb:
+                    progress_cb(next_emit, total)
+                if should_cancel and should_cancel():
+                    raise Cancelled()
+            if next_emit < total:
+                keep_from = plan[next_emit].k
+                drop = keep_from - base
+                if drop > 0:
+                    del decoded[:drop]
+                    base = keep_from
 
     try:
         for packet in session.container.demux():

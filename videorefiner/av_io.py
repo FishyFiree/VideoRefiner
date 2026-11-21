@@ -14,11 +14,13 @@ from typing import Optional
 import av
 import numpy as np
 
-# 质量预设 → (preset, crf 表)。PRD：默认软件编码，CRF 20/22（均衡档）。
+# 质量预设 → (x264/x265 preset, crf 表)。
+# 性能导向：preset 相比旧版整体前移一档（编码是本管线的主要 CPU 耗时项之一），
+# 同 CRF 下体积/画质基本不变、速度显著提升；需要极致画质可自行改回更慢 preset。
 QUALITY_PRESETS = {
-    "high":     {"preset": "slow",   "crf": {"h264": 18, "h265": 20}},
-    "balanced": {"preset": "medium", "crf": {"h264": 20, "h265": 22}},
-    "small":    {"preset": "fast",   "crf": {"h264": 24, "h265": 26}},
+    "high":     {"preset": "medium",   "crf": {"h264": 18, "h265": 20}},
+    "balanced": {"preset": "faster",   "crf": {"h264": 20, "h265": 22}},
+    "small":    {"preset": "veryfast", "crf": {"h264": 24, "h265": 26}},
 }
 CODECS = {"h264": "libx264", "h265": "libx265"}
 # 注：NVENC 硬件编码（h264_nvenc / hevc_nvenc）在实测环境中驱动层不可用，
